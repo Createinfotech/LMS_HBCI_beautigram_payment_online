@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Beautygram Payment</title>
+
+  <!-- Razorpay -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, updateDoc, arrayUnion, addDoc,
+             collection, serverTimestamp, query, where, getDocs }
+      from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD35XlUqrSVRg6gyoJyQ7SRfLlpHTSKeyE",
+      authDomain: "beauty-lms.firebaseapp.com",
+      projectId: "beauty-lms",
+      storageBucket: "beauty-lms.firebasestorage.app",
+      messagingSenderId: "149236103933",
+      appId: "1:149236103933:web:4817f3d520beef737e9c94"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    window._db = db;
+    window._fs = { doc, getDoc, updateDoc, arrayUnion, addDoc,
+                   collection, serverTimestamp, query, where, getDocs };
+    window._firebaseReady = true;
+    console.log('Firebase ready ✅');
+  </script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --pink: #c0396b;
+      --pink-light: #e8749a;
+      --purple: #8B5CF6;
+      --pink-bg: #fff5f8;
+    }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f8fc; color: #222; min-height: 100vh; }
+
+    /* HEADER */
+    header {
+      padding: 20px 24px 40px;
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    header.enroll  { background: linear-gradient(135deg, var(--pink), var(--pink-light)); }
+    header.premium { background: linear-gradient(135deg, var(--pink), var(--purple)); }
+    header::before {
+      content: ''; position: absolute;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%; top: -60px; right: -60px;
+    }
+    .header-icon {
+      width: 64px; height: 64px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; margin-bottom: 10px;
+    }
+    header h1 { color: white; font-size: 1.5rem; font-weight: 800; }
+    header p  { color: rgba(255,255,255,0.85); font-size: 0.88rem; margin-top: 4px; }
+
+    /* LOADING */
+    #loading {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 60vh; gap: 16px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--pink);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CONTENT */
+    #content {
+      display: none; max-width: 520px;
+      margin: -20px auto 40px; padding: 0 16px;
+    }
+
+    /* CARD */
+    .card {
+      background: white; border-radius: 16px; overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 16px;
+    }
+
+    /* COURSE IMAGE */
+    .course-img-wrap {
+      width: 100%; height: 180px;
+      background: linear-gradient(135deg, #fce4ec, #f8bbd0);
+      display: flex; align-items: center; justify-content: center; font-size: 60px;
+    }
+    .course-img-wrap img { width: 100%; height: 180px; object-fit: cover; }
+    .course-info { padding: 18px; }
+    .course-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
+    .course-instructor { color: var(--pink); font-size: 0.88rem; margin-bottom: 10px; }
+    .stats {
+      display: flex; border-top: 1px solid #f5f5f5;
+      border-bottom: 1px solid #f5f5f5; padding: 10px 0; margin-bottom: 10px;
+    }
+    .stat { flex: 1; text-align: center; }
+    .stat-val { font-weight: 700; font-size: 0.95rem; }
+    .stat-lbl { font-size: 0.72rem; color: #888; }
+    .course-desc { font-size: 0.88rem; color: #555; line-height: 1.6; }
+
+    /* USER CARD */
+    .user-card {
+      background: var(--pink-bg); border: 1px solid #f8bbd0;
+      border-radius: 12px; padding: 12px 16px; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 12px;
+      overflow: hidden; padding-top: 30px;
+    }
+    .user-info { flex: 1; min-width: 0; }
+    .user-info #uEmail {
+      font-weight: 700; font-size: 0.88rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .avatar {
+      width: 42px; height: 42px;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; color: white; font-weight: 800; font-size: 1rem;
+      min-width: 42px; flex-shrink: 0;
+    }
+
+    /* PLAN CARDS */
+    .section-title { font-size: 0.95rem; font-weight: 700; color: #333; margin-bottom: 10px; }
+    .plan-card {
+      background: white; border-radius: 14px; padding: 16px;
+      margin-bottom: 10px; border: 2px solid #eee; cursor: pointer;
+      transition: all 0.2s; box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+      position: relative;
+    }
+    .plan-card:hover { transform: translateY(-1px); }
+    .plan-card.selected {
+      border-color: var(--pink); background: var(--pink-bg);
+      box-shadow: 0 4px 16px rgba(192,57,107,0.15);
+    }
+    .popular-badge {
+      position: absolute; top: -10px; right: 14px;
+      background: linear-gradient(135deg, #FF6B6B, #EE5A52);
+      color: white; font-size: 0.68rem; font-weight: 800;
+      padding: 2px 10px; border-radius: 20px; letter-spacing: 0.4px;
+    }
+    .plan-row { display: flex; align-items: center; gap: 10px; }
+    .radio-circle {
+      width: 20px; height: 20px; min-width: 20px;
+      border-radius: 50%; border: 2px solid #ccc;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .plan-card.selected .radio-circle { background: var(--pink); border-color: var(--pink); }
+    .radio-dot { width: 8px; height: 8px; background: white; border-radius: 50%; display: none; }
+    .plan-card.selected .radio-dot { display: block; }
+    .plan-info { flex: 1; }
+    .plan-name { font-weight: 700; font-size: 0.95rem; color: #1a1a1a; }
+    .plan-desc { font-size: 0.78rem; color: #888; margin-top: 1px; }
+    .plan-price-col { text-align: right; }
+    .orig-price { font-size: 0.78rem; color: #bbb; text-decoration: line-through; }
+    .curr-price { font-size: 1.3rem; font-weight: 800; color: #1a1a1a; }
+    .plan-card.selected .curr-price { color: var(--pink); }
+    .plan-dur { font-size: 0.72rem; color: #999; }
+    .discount-badge {
+      display: inline-block; background: #f0fdf4;
+      border: 1px solid #86efac; color: #16a34a;
+      font-size: 0.72rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 20px; margin-top: 6px;
+    }
+
+    /* FEATURES */
+    .features-card { background: white; border-radius: 14px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .feature-item { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; font-size: 0.88rem; color: #444; }
+
+    /* ORDER SUMMARY */
+    .order-card { padding: 18px; }
+    .order-heading { font-size: 0.95rem; font-weight: 700; margin-bottom: 14px; }
+    .order-row {
+      display: flex; justify-content: space-between;
+      padding: 7px 0; border-bottom: 1px solid #f5f5f5;
+      font-size: 0.88rem; color: #555;
+    }
+    .order-total {
+      display: flex; justify-content: space-between;
+      padding-top: 12px; font-weight: 800; font-size: 1.05rem;
+      border-top: 2px solid #fce4ec; margin-top: 8px;
+    }
+    .total-amt { color: var(--pink); font-size: 1.25rem; }
+
+    /* PAY BUTTON */
+    #payBtn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--pink), var(--pink-light));
+      color: white; border: none; border-radius: 14px;
+      font-size: 1.05rem; font-weight: 700; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(192,57,107,0.3);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    #payBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(192,57,107,0.4); }
+    #payBtn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .secure-note { text-align: center; margin-top: 8px; font-size: 0.78rem; color: #888; }
+
+    /* STATES */
+    .center-card { max-width: 520px; margin: 32px auto; padding: 0 16px; display: none; }
+    .state-box {
+      background: white; border-radius: 16px; padding: 48px 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center;
+    }
+    .state-icon  { font-size: 70px; margin-bottom: 16px; }
+    .state-title { font-size: 1.35rem; font-weight: 700; margin-bottom: 8px; }
+    .state-sub   { color: #666; font-size: 0.93rem; margin-bottom: 24px; line-height: 1.6; }
+    .app-btn {
+      display: inline-block; padding: 14px 32px;
+      background: linear-gradient(135deg, var(--pink), var(--pink-light));
+      color: white; border-radius: 12px; font-weight: 700;
+      font-size: 1rem; text-decoration: none; border: none; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="pageHeader" class="enroll">
+  <div class="header-icon" id="headerIcon">💄</div>
+  <h1 id="headerTitle">Beautygram</h1>
+  <p id="headerSubtitle">Beauty Learning Platform</p>
+</header>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p style="color:#888" id="loadingText">Loading...</p>
+</div>
+
+<!-- ERROR -->
+<div class="center-card" id="errorDiv">
+  <div class="state-box">
+    <div class="state-icon">😕</div>
+    <div class="state-title" style="color:#e53935">Something went wrong</div>
+    <div class="state-sub">App માંથી ફરી try કરો.</div>
+  </div>
+</div>
+
+<!-- SUCCESS -->
+<div class="center-card" id="successDiv">
+  <div class="state-box">
+    <div class="state-icon" id="successIcon">🎉</div>
+    <div class="state-title" id="successTitle">Payment Successful!</div>
+    <div class="state-sub" id="successMsg">App open કરો.</div>
+    <button class="app-btn" onclick="openApp()">📱 App માં Open કરો</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="content">
+
+  <!-- User Info -->
+  <div class="user-card">
+    <div class="avatar" id="uAvatar">U</div>
+    <div class="user-info">
+      <div id="uEmail">User</div>
+      <div style="color:#888;font-size:0.78rem" id="uRole">Account</div>
+    </div>
+  </div>
+
+  <!-- ── ENROLL SECTION ── -->
+  <div id="enrollSection" style="display:none">
+
+    <!-- Course Card -->
+    <div class="card">
+      <div class="course-img-wrap" id="imgWrap">🎓</div>
+      <div class="course-info">
+        <div class="course-title" id="cTitle">Loading...</div>
+        <div class="course-instructor">👩‍🏫 <span id="cInstructor"></span></div>
+        <div class="stats">
+          <div class="stat"><div class="stat-val" id="cLessons">-</div><div class="stat-lbl">Lessons</div></div>
+          <div class="stat"><div class="stat-val" id="cDuration">-</div><div class="stat-lbl">Duration</div></div>
+          <div class="stat"><div class="stat-val" id="cRating">-</div><div class="stat-lbl">Rating ⭐</div></div>
+        </div>
+        <div class="course-desc" id="cDesc"></div>
+      </div>
+    </div>
+
+    <!-- Already Enrolled -->
+    <div class="card" id="enrolledCard" style="display:none">
+      <div class="state-box" style="padding:32px 24px">
+        <div class="state-icon">✅</div>
+        <div class="state-title">Already Enrolled!</div>
+        <div class="state-sub">તમે આ course માં already enroll છો.</div>
+        <button class="app-btn" onclick="openApp()">App માં Open કરો</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── SUBSCRIBE SECTION ── -->
+  <div id="subscribeSection" style="display:none">
+
+    <!-- Already Premium -->
+    <div id="alreadyPremium" style="display:none;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:14px;padding:20px;text-align:center;margin-bottom:16px">
+      <div style="font-size:40px">✅</div>
+      <div style="font-weight:700;color:#16a34a;font-size:1.05rem;margin:10px 0 6px">Already Premium!</div>
+      <div style="color:#555;font-size:0.88rem" id="premiumExpiry">તમે already premium subscriber છો.</div>
+      <br>
+      <button class="app-btn" onclick="openApp()">App માં Open કરો</button>
+    </div>
+
+    <!-- Plan Selection -->
+    <div id="planSection">
+      <div class="section-title">📋 Plan Select કરો</div>
+      <div id="plansList"></div>
+
+      <!-- Features -->
+      <div class="features-card">
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:10px">✨ Premium માં શું મળશે</div>
+        <div class="feature-item"><span>🔔</span> Instant premium content notifications</div>
+        <div class="feature-item"><span>📚</span> Exclusive courses & materials</div>
+        <div class="feature-item"><span>🎯</span> Priority support & early access</div>
+        <div class="feature-item"><span>📱</span> Offline content download</div>
+        <div class="feature-item"><span>🎨</span> Ad-free learning experience</div>
+        <div class="feature-item"><span>🔴</span> Exclusive live sessions access</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ORDER SUMMARY (both modes) -->
+  <div class="card" id="orderCard">
+    <div class="order-card">
+      <div class="order-heading">📋 Order Summary</div>
+      <div class="order-row"><span id="oName">Item</span><span id="oPrice">₹0</span></div>
+      <div class="order-row"><span>GST (18%)</span><span id="oGst">₹0</span></div>
+      <div class="order-total"><span>Total</span><span class="total-amt" id="oTotal">₹0</span></div>
+    </div>
+  </div>
+
+  <!-- Pay Button -->
+  <button id="payBtn" onclick="startPayment()">💳 Pay Now</button>
+  <div class="secure-note">🔒 Secured by Razorpay</div>
+
+</div>
+
+<script type="module">
+  import { getFirestore, doc, getDoc, updateDoc, arrayUnion,
+           addDoc, collection, serverTimestamp, query, where, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const RAZORPAY_KEY = 'rzp_test_SQGdFwABVjcu3V';
+
+  const params = new URLSearchParams(window.location.search);
+  const mode  = params.get('mode') || 'enroll';
+  const uid   = params.get('uid')  || '';
+  const email = params.get('email')|| '';
+  const phone = params.get('phone')|| '';
+  const courseId = params.get('courseId') || '';
+  const planIdParam = params.get('planId') || '';
+
+  let courseData   = null;
+  let selectedPlan = null;
+  let allPlans     = [];
+  let finalAmount  = 0;
+
+  document.getElementById('uEmail').textContent = email || 'User';
+  document.getElementById('uAvatar').textContent = (email || 'U')[0].toUpperCase();
+
+  if (mode === 'subscribe') {
+    document.getElementById('pageHeader').className    = 'premium';
+    document.getElementById('headerIcon').textContent  = '👑';
+    document.getElementById('headerTitle').textContent = 'Go Premium';
+    document.getElementById('headerSubtitle').textContent = 'Unlock unlimited beauty learning';
+    document.getElementById('uRole').textContent       = 'Subscribing account';
+    document.getElementById('loadingText').textContent = 'Loading plans...';
+  } else {
+    document.getElementById('uRole').textContent = 'Enrolled account';
+    document.getElementById('loadingText').textContent = 'Loading course details...';
+  }
+
+  async function init() {
+    if (!uid) { show('errorDiv'); return; }
+    if (mode === 'subscribe') {
+      await initSubscribe();
+    } else {
+      await initEnroll();
+    }
+  }
+
+  async function initEnroll() {
+    if (!courseId) { show('errorDiv'); return; }
+    try {
+      const db = window._db;
+      const { doc, getDoc } = window._fs;
+
+      const courseSnap = await getDoc(doc(db, 'courses', courseId));
+      if (!courseSnap.exists()) { show('errorDiv'); return; }
+
+      courseData = { id: courseSnap.id, ...courseSnap.data() };
+
+      const userSnap = await getDoc(doc(db, 'users', uid));
+      if (userSnap.exists()) {
+        const list = userSnap.data().enrolledCourses || [];
+        if (list.includes(courseId)) {
+          renderCourse(courseData);
+          document.getElementById('enrollSection').style.display = 'block';
+          document.getElementById('orderCard').style.display    = 'none';
+          document.getElementById('payBtn').style.display       = 'none';
+          document.querySelector('.secure-note').style.display  = 'none';
+          document.getElementById('enrolledCard').style.display = 'block';
+          show('content'); return;
+        }
+      }
+
+      renderCourse(courseData);
+      document.getElementById('enrollSection').style.display = 'block';
+      show('content');
+
+    } catch (e) {
+      console.error(e); show('errorDiv');
+    }
+  }
+
+  function renderCourse(c) {
+    document.getElementById('cTitle').textContent      = c.title || '';
+    document.getElementById('cInstructor').textContent = c.instructor || '';
+    document.getElementById('cLessons').textContent    = c.totalLessons || '-';
+    document.getElementById('cDuration').textContent   = c.duration || '-';
+    document.getElementById('cRating').textContent     = c.rating ? c.rating.toFixed(1) : '-';
+    document.getElementById('cDesc').textContent       = c.description || '';
+
+    if (c.imageUrl) {
+      document.getElementById('imgWrap').innerHTML =
+        `<img src="${c.imageUrl}" alt="${c.title}" onerror="this.parentNode.innerHTML='🎓'"/>`;
+    }
+
+    const price = c.price || 0;
+    const gst   = Math.round(price * 0.18);
+    finalAmount = price + gst;
+
+    document.getElementById('oName').textContent  = c.title || '';
+    document.getElementById('oPrice').textContent = `₹${price}`;
+    document.getElementById('oGst').textContent   = `₹${gst}`;
+    document.getElementById('oTotal').textContent = `₹${finalAmount}`;
+    document.getElementById('payBtn').textContent = `💳 Pay ₹${finalAmount} & Enroll`;
+  }
+
+  async function initSubscribe() {
+    try {
+      const db = window._db;
+      const { doc, getDoc } = window._fs;
+
+      const userSnap = await getDoc(doc(db, 'users', uid));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.isPremium === true) {
+          const expiry = data.premiumExpiry?.toDate?.();
+          if (expiry) {
+            document.getElementById('premiumExpiry').textContent =
+              `Expires: ${expiry.getDate()}/${expiry.getMonth()+1}/${expiry.getFullYear()}`;
+          }
+          document.getElementById('alreadyPremium').style.display = 'block';
+          document.getElementById('planSection').style.display    = 'none';
+          document.getElementById('orderCard').style.display      = 'none';
+          document.getElementById('payBtn').style.display         = 'none';
+          document.querySelector('.secure-note').style.display    = 'none';
+          document.getElementById('subscribeSection').style.display = 'block';
+          show('content'); return;
+        }
+      }
+
+      await loadPlans();
+      document.getElementById('subscribeSection').style.display = 'block';
+      show('content');
+
+    } catch (e) {
+      console.error(e); show('errorDiv');
+    }
+  }
+
+  async function loadPlans() {
+    try {
+      const db = window._db;
+      const { collection, query, where, getDocs } = window._fs;
+
+      const q    = query(collection(db, 'subscription_plans'), where('isActive', '==', true));
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        allPlans = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allPlans.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      } else {
+        allPlans = [
+          { id: 'monthly',   name: '1 Month',   description: 'Monthly plan',      price: 299,  originalPrice: 399,  durationMonths: 1,  isPopular: false, durationText: '1 Month',   pricePerMonth: '₹299/mo' },
+          { id: 'quarterly', name: '3 Months',  description: 'Most popular plan', price: 799,  originalPrice: 1197, durationMonths: 3,  isPopular: true,  durationText: '3 Months',  pricePerMonth: '₹266/mo' },
+          { id: 'yearly',    name: '12 Months', description: 'Best value plan',   price: 2499, originalPrice: 4788, durationMonths: 12, isPopular: false, durationText: '12 Months', pricePerMonth: '₹208/mo' },
+        ];
+      }
+
+      renderPlans();
+
+      const auto = allPlans.find(p => p.id === planIdParam)
+                || allPlans.find(p => p.isPopular)
+                || allPlans[0];
+      if (auto) selectPlan(auto);
+
+    } catch (e) {
+      console.error('Plan load error:', e);
+    }
+  }
+
+  function renderPlans() {
+    const container = document.getElementById('plansList');
+    container.innerHTML = '';
+
+    // If planId passed in URL, show ONLY that plan
+    const plansToShow = planIdParam
+      ? allPlans.filter(p => p.id === planIdParam)
+      : allPlans;
+
+    // If planId not found, fallback to all plans
+    const finalPlans = plansToShow.length > 0 ? plansToShow : allPlans;
+
+    finalPlans.forEach(plan => {
+      const discount = plan.originalPrice && plan.originalPrice > plan.price
+        ? `Save ${Math.round((1 - plan.price / plan.originalPrice) * 100)}%` : null;
+
+      const card = document.createElement('div');
+      // If only 1 plan, auto-select it and hide radio
+      const isSingle = finalPlans.length === 1;
+      card.className = `plan-card${(plan.isPopular || isSingle) ? ' selected' : ''}`;
+      card.id = `plan-${plan.id}`;
+      if (!isSingle) card.onclick = () => selectPlan(plan);
+      card.innerHTML = `
+        ${plan.isPopular && !isSingle ? '<div class="popular-badge">⭐ POPULAR</div>' : ''}
+        <div class="plan-row">
+          ${!isSingle ? '<div class="radio-circle"><div class="radio-dot"></div></div>' : ''}
+          <div class="plan-info">
+            <div class="plan-name">${plan.name}</div>
+            <div class="plan-desc">${plan.description || ''}</div>
+          </div>
+          <div class="plan-price-col">
+            ${plan.originalPrice && plan.originalPrice > plan.price
+              ? `<div class="orig-price">₹${plan.originalPrice}</div>` : ''}
+            <div class="curr-price">₹${plan.price}</div>
+            <div class="plan-dur">${plan.durationText || ''}</div>
+          </div>
+        </div>
+        ${discount || (plan.durationMonths > 1 && plan.pricePerMonth)
+          ? `<div style="margin-top:6px">
+              ${discount ? `<span class="discount-badge">🎉 ${discount}</span>` : ''}
+              ${plan.durationMonths > 1 && plan.pricePerMonth
+                ? `<span style="font-size:0.75rem;color:#888;margin-left:8px">${plan.pricePerMonth}</span>` : ''}
+             </div>` : ''}
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function selectPlan(plan) {
+    selectedPlan = plan;
+    document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+    const card = document.getElementById(`plan-${plan.id}`);
+    if (card) card.classList.add('selected');
+
+    const p   = plan.price || 0;
+    const gst = Math.round(p * 0.18);
+    finalAmount = p + gst;
+
+    document.getElementById('oName').textContent  = plan.name;
+    document.getElementById('oPrice').textContent = `₹${p}`;
+    document.getElementById('oGst').textContent   = `₹${gst}`;
+    document.getElementById('oTotal').textContent = `₹${finalAmount}`;
+    document.getElementById('payBtn').textContent =
+      `👑 Subscribe ₹${finalAmount} · ${plan.durationText || ''}`;
+  }
+
+  window.startPayment = function () {
+    const isSubscribe = mode === 'subscribe';
+    const desc = isSubscribe
+      ? `${selectedPlan?.name} Subscription`
+      : courseData?.title || 'Course Purchase';
+
+    const options = {
+      key: RAZORPAY_KEY,
+      amount: finalAmount * 100,
+      currency: 'INR',
+      name: 'Beautygram',
+      description: desc,
+      image: 'https://beautygram.in/logo.png',
+      prefill: { email, contact: phone, name: email.split('@')[0] },
+      theme: { color: '#c0396b' },
+      handler: async function (response) {
+        isSubscribe
+          ? await onSubscribeSuccess(response)
+          : await onEnrollSuccess(response);
+      },
+      modal: { ondismiss: function () {} },
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.on('payment.failed', r => alert('Payment failed: ' + r.error.description));
+    rzp.open();
+  };
+
+  async function onEnrollSuccess(response) {
+    const btn = document.getElementById('payBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Enrollment processing...';
+
+    try {
+      const db = window._db;
+      const { doc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } = window._fs;
+
+      await updateDoc(doc(db, 'users', uid), {
+        enrolledCourses: arrayUnion(courseId)
+      });
+
+      await addDoc(collection(db, 'purchases'), {
+        uid, courseId,
+        courseTitle: courseData.title,
+        amount: finalAmount,
+        razorpayPaymentId: response.razorpay_payment_id,
+        email, purchasedAt: serverTimestamp(), status: 'success'
+      });
+
+      await updateDoc(doc(db, 'courses', courseId), {
+        enrolledCount: (courseData.enrolledCount || 0) + 1
+      });
+
+      document.getElementById('successIcon').textContent  = '🎉';
+      document.getElementById('successTitle').textContent = 'Enrollment Successful!';
+      document.getElementById('successMsg').textContent   =
+        'Course unlock થઈ ગઈ! App open કરો અને શીખવાનું શરૂ કરો.';
+      show('successDiv');
+
+    } catch (e) {
+      console.error(e);
+      alert('Payment done! App refresh karo. Issue: ramdev3694@gmail.com');
+      show('successDiv');
+    }
+  }
+
+  async function onSubscribeSuccess(response) {
+    const btn = document.getElementById('payBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Activating subscription...';
+
+    try {
+      const db = window._db;
+      const { doc, updateDoc, addDoc, collection, serverTimestamp } = window._fs;
+
+      const now    = new Date();
+      const expiry = new Date(now);
+      expiry.setMonth(expiry.getMonth() + (selectedPlan.durationMonths || 1));
+
+      await updateDoc(doc(db, 'users', uid), {
+        isPremium: true,
+        activePlanId: selectedPlan.id,
+        activePlanName: selectedPlan.name,
+        premiumExpiry: expiry,
+        premiumStartDate: now,
+      });
+
+      await addDoc(collection(db, 'subscriptions'), {
+        uid, planId: selectedPlan.id, planName: selectedPlan.name,
+        amount: finalAmount, durationMonths: selectedPlan.durationMonths || 1,
+        razorpayPaymentId: response.razorpay_payment_id,
+        email, startDate: now, expiryDate: expiry,
+        subscribedAt: serverTimestamp(), status: 'active'
+      });
+
+      document.getElementById('successIcon').textContent  = '👑';
+      document.getElementById('successTitle').textContent = "You're Premium!";
+      document.getElementById('successMsg').textContent   =
+        `${selectedPlan.name} activate થઈ ગઈ! App open કરો અને enjoy કરો.`;
+      show('successDiv');
+
+    } catch (e) {
+      console.error(e);
+      alert('Payment done! App refresh karo. Issue: ramdev3694@gmail.com');
+      show('successDiv');
+    }
+  }
+
+  window.openApp = function () {
+    window.location.href = mode === 'subscribe'
+      ? 'beautygram://premium'
+      : 'beautygram://courses';
+    setTimeout(() => {
+      window.location.href =
+        'https://play.google.com/store/apps/details?id=com.hbci.lms_app_hbci';
+    }, 2000);
+  };
+
+  function show(id) {
+    document.getElementById('loading').style.display = 'none';
+    ['errorDiv', 'successDiv', 'content'].forEach(i => {
+      const el = document.getElementById(i);
+      if (el) el.style.display = (i === id ? 'block' : 'none');
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  const wait = setInterval(() => {
+    if (window._firebaseReady) { clearInterval(wait); init(); }
+  }, 100);
+</script>
+
+</body>
+</html>
